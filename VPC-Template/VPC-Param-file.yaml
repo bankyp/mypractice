@@ -1,0 +1,17 @@
+
+- ParameterKey: kvpc
+  ParameterValue: 14.0.0.0/16
+- ParameterKey: jvpc
+  ParameterValue: 15.0.0.0/16
+- ParameterKey: kpubsubnet1
+  ParameterValue: 14.0.1.0/24
+- ParameterKey: kprivatesubnet1
+  ParameterValue: 14.0.2.0/24
+- ParameterKey: kprivatesubnet2
+  ParameterValue: 14.0.3.0/24
+- ParameterKey: jpubsubnet1
+  ParameterValue: 15.0.1.0/24
+- ParameterKey: jprivatesubnet1
+  ParameterValue: 15.0.2.0/24
+- ParameterKey: jprivatesubnet2
+  ParameterValue: 15.0.3.0/24

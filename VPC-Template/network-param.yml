@@ -1,0 +1,350 @@
+# Create 2 Availabilty Zones with Internet Gateway
+# 2 Public Subnets and 4 Private subnets
+# 1 Application Load Balancer in the public subnet that has WAF(for security) and Bastion Host
+# 2 NAT gateways in the 2 AZs
+
+Parameters:
+  EnvironmentName:
+    Description: What type of Environment are you creating?
+    Type: String
+    Default: DevEnvironment
+    AllowedValues:
+      - DevEnvironment
+      - TestEnvironment
+      - PreprodEnvironment
+      - ProdEnvironment
+
+  kvpc:
+    Description: K-VPC with CIDR block of 14.0.0.0/16
+    Type: String
+
+  jvpc:
+    Description: j-vpc with CIDR block of 15.0.0.0/16
+    Type: String
+
+  kpubsubnet1:
+    Description: k-public subnet
+    Type: String
+
+  kprivatesubnet1:
+    Description: k-private subnet 1 in say AZ1
+    Type: String
+
+  kprivatesubnet2:
+    Description: k-private subnet 2 in say AZ1
+    Type: String
+
+  jpubsubnet1:
+    Description: j-public subnet
+    Type: String
+
+  jprivatesubnet1:
+    Description: j-private subnet 1 in say AZ2
+    Type: String
+
+  jprivatesubnet2:
+    Description: j-private subnet 2 in say AZ2
+    Type: String
+
+
+Resources:
+
+# K-VPC, J-VPC, 1 public subnet created in each VPCs, 2 private subnets created in each VPCs 
+  TransactVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref kvpc
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: Transaction-VPC
+
+  TransactPubSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransactVpc
+      CidrBlock: !Ref kpubsubnet1
+      AvailabilityZone: 
+        Fn::Select: 
+          - 0
+          - Fn::GetAZs:
+              !Ref AWS::Region
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: Transaction-PubSubnet
+
+  TransactPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransactVpc
+      CidrBlock: !Ref kprivatesubnet1
+      AvailabilityZone: 
+        Fn::Select: 
+          - 0
+          - Fn::GetAZs:
+              !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: Transaction-PrivateSubnet1
+
+  TransactPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransactVpc 
+      CidrBlock: !Ref kprivatesubnet2
+      AvailabilityZone: 
+        Fn::Select: 
+          - 0
+          - Fn::GetAZs:
+              !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: Transaction-PrivateSubnet2
+  
+  StreamVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref jvpc
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: Streaming-VPC
+
+  StreamPubSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StreamVpc 
+      CidrBlock: !Ref jpubsubnet1
+      AvailabilityZone: 
+        Fn::Select: 
+          - 1
+          - Fn::GetAZs:
+              !Ref AWS::Region
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: Streaming-PubSubnet
+
+  StreamPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StreamVpc
+      CidrBlock: !Ref jprivatesubnet1
+      AvailabilityZone: 
+        Fn::Select: 
+          - 1
+          - Fn::GetAZs:
+              !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: Streaming-PrivateSubnet1
+
+  StreamPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StreamVpc
+      CidrBlock: !Ref jprivatesubnet2
+      AvailabilityZone: 
+        Fn::Select: 
+          - 1
+          - Fn::GetAZs:
+              !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: Streaming-PrivateSubnet2
+
+# Create Internet gateways
+  KIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${EnvironmentName}-IGW
+
+  AttachKIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref KIGW
+      VpcId: !Ref TransactVpc
+
+  JIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${EnvironmentName}-IGW
+
+
+  AttachJIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref JIGW
+      VpcId: !Ref StreamVpc
+
+# Route Table Creation for K-VPC and J-VPC
+#K-Public Route Table, Routes and association creation
+  kPubRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TransactVpc
+      Tags:
+        - Key: Name
+          Value: k-public-routetable
+
+  kPubRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref kPubRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref KIGW
+
+  kPubSubnetAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref kPubRouteTable
+      SubnetId: !Ref TransactPubSubnet
+
+# K-Private Route Table, Routes and association creation
+  kPriRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TransactVpc
+      Tags:
+        - Key: Name
+          Value: k-private-routetable
+
+  kPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref kPriRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref kNAT
+
+  KPrivateSubnetAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TransactPrivateSubnet1
+      RouteTableId: !Ref kPriRouteTable
+
+  KPrivateSubnetAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TransactPrivateSubnet2
+      RouteTableId: !Ref kPriRouteTable
+
+#J-Public Route Table, Routes and association creation
+  jPubRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref StreamVpc
+      Tags:
+        - Key: Name
+          Value: j-public-routetable
+
+  JPubRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref jPubRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref JIGW
+
+  jPubSubnetAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref jPubRouteTable
+      SubnetId: !Ref StreamPubSubnet
+
+# K-Private Route Table, Routes and association creation
+  jPriRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref StreamVpc
+      Tags:
+        - Key: Name
+          Value: j-private-routetable
+
+  jPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref jPriRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref jNAT
+
+  jPrivateSubnetAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref StreamPrivateSubnet1
+      RouteTableId: !Ref jPriRouteTable
+
+  jPrivateSubnetAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref StreamPrivateSubnet2
+      RouteTableId: !Ref jPriRouteTable
+
+# Need a NAT that will be associated to the private route tables
+  kNAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - EIPTransact
+          - AllocationId
+      SubnetId: !Ref TransactPubSubnet
+      Tags:
+        - Key: Name
+          Value: Transaction-NAT
+
+  EIPTransact:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: !Ref TransactVpc
+
+  jNAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - EIPStream
+          - AllocationId
+      SubnetId: !Ref StreamPubSubnet
+      Tags:
+        - Key: Name
+          Value: Stream-NAT
+
+  EIPStream:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: !Ref StreamVpc
+
+Outputs:
+  TransactVpcOutputName:
+    Description: Name of VPC
+    Value: !Ref TransactVpc
+
+  TransactVpcOutput:
+    Description: ID output for Transact VPC
+    Value:
+      Fn::GetAtt:
+        - TransactVpc
+        - VpcId
+    Export:
+      Name: !Sub ${AWS::StackName}-TransactVpcOutput
+
+  StreamVpcOutputName:
+    Description: Name of VPC
+    Value: !Ref StreamVpc
+
+  StreamVpcOutput:
+    Description: ID output for Stream VPC
+    Value:
+      Fn::GetAtt:
+        - StreamVpc
+        - VpcId
+    Export:
+      Name: !Sub ${AWS::StackName}-StreamVpcOutput

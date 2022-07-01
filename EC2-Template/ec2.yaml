@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 instance stack
+
+Parameters: 
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: EC2 Availabilty Zone
+    AllowedPattern: ^[a-zA-Z0-9]*$
+  
+  EnvironmentName:
+    Description: Select an environment
+    Type: String
+    AllowedValues:
+      - Dev
+      - Testing
+      - Pre-Prod
+      - Production
+    ConstraintDescription: Environment must match with specified AllowedValues
+  
+  KeyNameParam:
+    Description: An existing EC2 Keypair to enable SSH access into an Instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: This must be an existing Keypair
+
+  InstanceTypeParam:
+    Description: Type of EC2 instance allowed
+    Type: String
+    Default: t2.micro
+    AllowedValues: [t2.micro, t2.small, t2.medium,  t2.large, m1.small, 
+      m1.medium, t3.medium, t3.large]
+    ConstraintDescription: Must select a valid EC2 Instance
+
+  LatestAmiId:
+    Type:  'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources: 
+  EC2Instance:
+    
+
+Outputs:
